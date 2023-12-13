@@ -17,6 +17,11 @@ namespace NTLogin
 		[DllImport("user32.dll")]
 		static extern bool SetForegroundWindow(IntPtr hWnd);
 
+
+		[DllImport("user32.dll")]
+		static extern bool IsWindow(IntPtr hWnd);
+
+
 		static Process FindNinjaTrader()
 		{
 			var processlist = Process.GetProcessesByName("NinjaTrader");
@@ -64,8 +69,10 @@ namespace NTLogin
 				Thread.Sleep(100);
 			}
 
-			// Wait for NinjaTrader login window to show up.
-			Thread.Sleep(5000);
+			while(!IsWindow(ninjaProcess.MainWindowHandle))
+			{
+				Thread.Sleep(1000);
+			}
 
 			SetForegroundWindow(ninjaProcess.MainWindowHandle);
 
