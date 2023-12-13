@@ -1,5 +1,7 @@
 # NinjaTraderAutoLogin
 
+** This fork is modified to use just the tab key to get to the password field simplifying the code. It also checks to see if NinjaTrader.exe is already running and exits if it is. NinjaTrader cannot have multiple executions. It, however, doesn't verify if the process is the same user or not.
+
 This console application is intended to allow the user to automatically log in for NinjaTrader 8.1.x. The user must run the application with at least 2 arguments. It must include the login name and the password surrounded by quotes.
 
     NTLogin.exe "LOGIN_NAME" "PASSWORD"
