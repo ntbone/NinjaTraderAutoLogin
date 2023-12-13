@@ -24,10 +24,18 @@ namespace NTLogin
 
 		static Process FindNinjaTrader()
 		{
-			var processlist = Process.GetProcessesByName("NinjaTrader");
-			if(processlist.Length > 0)
+			var processes = Process.GetProcessesByName("NinjaTrader");
+			if(processes.Length > 0)
 			{
-				return processlist[0];				
+				var currentSessionId = Process.GetCurrentProcess().SessionId;
+
+				foreach(var process in processes)
+				{
+					if(process.SessionId == currentSessionId)
+					{
+						return process;
+					}
+				}
 			}
 
 			return null;
@@ -54,10 +62,17 @@ namespace NTLogin
 				ninjaExe = args[2];
 			}
 
+
+			if(string.IsNullOrEmpty(password))
+			{
+				Console.Error.WriteLine("Cannot launch NinjaTrader. No password specified");
+				return;
+			}
+
 			ninjaProcess = FindNinjaTrader();
 			if(ninjaProcess != null)
 			{
-				Console.WriteLine("Unable to start NinjaTrader. NinjaTrader is already running");
+				Console.Error.WriteLine("Unable to start NinjaTrader. NinjaTrader is already running");
 				return;
 			}
 
