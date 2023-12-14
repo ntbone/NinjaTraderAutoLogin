@@ -9,6 +9,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
 using static System.Net.Mime.MediaTypeNames;
+using System.Security.Principal;
 
 namespace NTLogin
 {
@@ -22,16 +23,51 @@ namespace NTLogin
 		static extern bool IsWindow(IntPtr hWnd);
 
 
+		[DllImport("advapi32.dll", SetLastError = true)]
+		private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+		[DllImport("kernel32.dll", SetLastError = true)]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		private static extern bool CloseHandle(IntPtr hObject);
+
+
+		static WindowsIdentity GetProcessUser(Process process)
+		{
+			IntPtr processHandle = IntPtr.Zero;
+			try
+			{
+				OpenProcessToken(process.Handle, 8, out processHandle);
+				return new WindowsIdentity(processHandle);
+			}
+			catch
+			{
+				return null;
+			}
+			finally
+			{
+				if(processHandle != IntPtr.Zero)
+				{
+					CloseHandle(processHandle);
+				}
+			}
+		}
+
+		static string GetUserName(WindowsIdentity identity)
+		{
+			string user = identity.Name;
+			return user.Contains(@"\") ? user.Substring(user.IndexOf(@"\") + 1) : user;
+		}
+
 		static Process FindNinjaTrader()
 		{
 			var processes = Process.GetProcessesByName("NinjaTrader");
 			if(processes.Length > 0)
 			{
-				var currentSessionId = Process.GetCurrentProcess().SessionId;
+				var currentUser = GetProcessUser(Process.GetCurrentProcess());
 
 				foreach(var process in processes)
 				{
-					if(process.SessionId == currentSessionId)
+					var processUser = GetProcessUser(process);
+					if(currentUser.User == processUser.User)
 					{
 						return process;
 					}
