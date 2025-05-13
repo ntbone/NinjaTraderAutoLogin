@@ -106,6 +106,13 @@ namespace NTLogin
 			}
 
 			ninjaProcess = FindNinjaTrader();
+			while(ninjaProcess != null)
+			{
+				Thread.Sleep(1000);
+				ninjaProcess = FindNinjaTrader();
+			}
+
+
 			if(ninjaProcess != null)
 			{
 				Console.Error.WriteLine("Unable to start NinjaTrader. NinjaTrader is already running");
