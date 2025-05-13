@@ -1,18 +1,173 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Drawing;
 using System.Runtime.InteropServices;
-using System.Threading;
-using static System.Net.Mime.MediaTypeNames;
 using System.Security.Principal;
+using System.Threading;
+using System.Windows.Automation;
+using System.Windows.Forms;
 
 namespace NTLogin
 {
+	public static class UIAutomationHelper
+	{
+		/// <summary>
+		/// Finds an AutomationElement in the specified process by AutomationId, or optionally by ControlType and Name.
+		/// </summary>
+		/// <param name="process">The target Process object.</param>
+		/// <param name="automationId">The AutomationId to search for (can be null).</param>
+		/// <param name="controlType">Optional fallback ControlType (e.g., ControlType.Edit).</param>
+		/// <param name="name">Optional fallback Name property.</param>
+		/// <returns>The found AutomationElement, or null if not found.</returns>
+		public static AutomationElement FindControlInProcess(Process process, string automationId = null, ControlType controlType = null, string name = null)
+		{
+			if(process == null || process.MainWindowHandle == IntPtr.Zero)
+			{
+				return null;
+			}
+
+			AutomationElement mainWindow;
+			try
+			{
+				mainWindow = AutomationElement.FromHandle(process.MainWindowHandle);
+			}
+			catch(ElementNotAvailableException)
+			{
+				return null;
+			}
+
+			if(mainWindow == null)
+				return null;
+
+			Condition condition;
+
+			if(!string.IsNullOrEmpty(automationId))
+			{
+				condition = new PropertyCondition(AutomationElement.AutomationIdProperty, automationId);
+			}
+			else if(controlType != null && !string.IsNullOrEmpty(name))
+			{
+				condition = new AndCondition(
+					new PropertyCondition(AutomationElement.ControlTypeProperty, controlType),
+					new PropertyCondition(AutomationElement.NameProperty, name)
+				);
+			}
+			else if(controlType != null)
+			{
+				condition = new PropertyCondition(AutomationElement.ControlTypeProperty, controlType);
+			}
+			else
+			{
+				return null;
+			}
+
+			return mainWindow.FindFirst(TreeScope.Descendants, condition);
+		}
+
+		/// <summary>
+		/// Sets the text value of a supported AutomationElement (e.g., TextBox) using ValuePattern.
+		/// </summary>
+		/// <param name="element">The target AutomationElement (must support ValuePattern).</param>
+		/// <param name="text">The text to set.</param>
+		/// <returns>True if text was set successfully; false otherwise.</returns>
+		public static bool SetControlText(AutomationElement element, string text)
+		{
+			if(element == null || text == null)
+			{
+				return false;
+			}
+
+			if(!element.TryGetCurrentPattern(ValuePattern.Pattern, out object patternObj))
+			{
+				return false;
+			}
+
+			var valuePattern = patternObj as ValuePattern;
+			if(valuePattern == null || valuePattern.Current.IsReadOnly)
+			{
+				return false;
+			}
+
+			try
+			{
+				valuePattern.SetValue(text);
+				return true;
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		/// <summary>
+		/// Finds a button in the specified process by AutomationId.
+		/// </summary>
+		/// <param name="process">The target Process object.</param>
+		/// <param name="automationId">The AutomationId of the button.</param>
+		/// <returns>The found AutomationElement or null if not found.</returns>
+		public static AutomationElement FindButton(Process process, string automationId)
+		{
+			if(process == null || string.IsNullOrEmpty(automationId))
+			{
+				return null;
+			}
+
+			if(process.MainWindowHandle == IntPtr.Zero)
+			{
+				return null;
+			}
+
+			AutomationElement mainWindow;
+			try
+			{
+				mainWindow = AutomationElement.FromHandle(process.MainWindowHandle);
+			}
+			catch
+			{
+				return null;
+			}
+
+			if(mainWindow == null)
+			{
+				return null;
+			}
+
+			return mainWindow.FindFirst(
+				TreeScope.Descendants,
+				new PropertyCondition(AutomationElement.AutomationIdProperty, automationId)
+			);
+		}
+
+		/// <summary>
+		/// Attempts to invoke (click) a button AutomationElement using the InvokePattern.
+		/// </summary>
+		/// <param name="buttonElement">The button AutomationElement.</param>
+		/// <returns>True if clicked successfully; false otherwise.</returns>
+		public static bool TryClickButton(AutomationElement buttonElement)
+		{
+			if(buttonElement == null)
+			{
+				return false;
+			}
+
+			if(buttonElement.TryGetCurrentPattern(InvokePattern.Pattern, out object patternObj))
+			{
+				InvokePattern invokePattern = patternObj as InvokePattern;
+				try
+				{
+					invokePattern.Invoke();
+					return true;
+				}
+				catch
+				{
+					return false;
+				}
+			}
+
+			return false;
+		}
+	}
+
+
 	public class Program
 	{
 		[DllImport("user32.dll")]
@@ -77,6 +232,11 @@ namespace NTLogin
 			return null;
 		}
 
+
+		const string passwordEditBoxID = "passwordBox";
+		const string usernameEditBoxID = "tbUserName";
+		const string loginButtonID = "btnLogin";
+
 		[STAThread]
 		static void Main(string[] args)
 		{
@@ -132,16 +292,33 @@ namespace NTLogin
 				Thread.Sleep(1000);
 			}
 
-			SetForegroundWindow(ninjaProcess.MainWindowHandle);
+			var userNameBox = UIAutomationHelper.FindControlInProcess(ninjaProcess, usernameEditBoxID);
+			if(userNameBox != null)
+			{
+				UIAutomationHelper.SetControlText(userNameBox, userName);
+			}
 
-			// This puts focus into the password box
-			SendKeys.SendWait("{TAB}");
-			SendKeys.SendWait("{TAB}");
-			SendKeys.SendWait("{TAB}");
 
-			Clipboard.SetText(password);
-			SendKeys.SendWait("^v");
-			SendKeys.SendWait("{ENTER}");
-		}
+			var passwordBox = UIAutomationHelper.FindControlInProcess(ninjaProcess, passwordEditBoxID);
+			var loginButton = UIAutomationHelper.FindButton(ninjaProcess, loginButtonID);
+			if(passwordBox != null && loginButton != null)
+			{
+				UIAutomationHelper.SetControlText(passwordBox, password);
+				UIAutomationHelper.TryClickButton(loginButton);
+			}
+			else	
+			{
+				SetForegroundWindow(ninjaProcess.MainWindowHandle);
+
+				// This puts focus into the password box
+				SendKeys.SendWait("{TAB}");
+				SendKeys.SendWait("{TAB}");
+				SendKeys.SendWait("{TAB}");
+
+				Clipboard.SetText(password);
+				SendKeys.SendWait("^v");
+				SendKeys.SendWait("{ENTER}");
+			}
+		}	
 	}
 }
